@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>상하이 스마트 인터랙티브 여행 Web App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #090d16;
+            color: #f1f5f9;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #f59e0b;
+        }
+
+        /* Glow Animation & Effects */
+        .glow-amber {
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+        }
+        .map-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 12px rgba(245, 158, 11, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        /* Tab content animations */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .map-container {
+            background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+        }
+
+        /* Image Zoom Hover effect */
+        .img-zoom {
+            transition: transform 0.3s ease;
+        }
+        .img-zoom:hover {
+            transform: scale(1.05);
+        }
+
+        /* Mobile Map Toggle Animations */
+        .mobile-map-collapsed {
+            max-height: 0px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            opacity: 0;
+            overflow: hidden;
+            border-bottom: none !important;
+        }
+        .mobile-map-expanded {
+            max-height: 280px !important;
+            opacity: 1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Detail Panel Collapsible Styles for Desktop */
+        @media (min-width: 768px) {
+            .detail-panel-collapsed {
+                display: none !important;
+            }
+        }
+
+        /* Mobile full-screen view state logic */
+        @media (max-width: 767px) {
+            .mobile-hide {
+                display: none !important;
+            }
+            .mobile-show {
+                display: flex !important;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden bg-slate-950 text-slate-100">
+
+    <!-- Header Navigation -->
+    <header class="h-16 bg-slate-900 border-b border-slate-800 px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-bold text-xl shadow-lg glow-amber">
+                <i class="fa-solid fa-compass"></i>
+            </div>
+            <div>
+                <h1 class="text-base md:text-lg font-bold text-white flex items-center gap-2">
+                    SHANGHAI <span class="text-xs px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/30">SMART GUIDE</span>
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">상하이 스마트 인터랙티브 여행 앱</p>
+            </div>
+        </div>
+
+        <!-- Search Bar & Controls -->
+        <div class="flex items-center gap-2">
+            <!-- Universal Detail Panel Toggle Button -->
+            <button onclick="toggleDetailPanel()" id="btn-detail-toggle" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 shadow-md flex items-center gap-1.5 hover:bg-amber-300 transition">
+                <i class="fa-solid fa-sidebar" id="detail-btn-icon"></i>
+                <span id="detail-btn-text">설명창 접기</span>
+            </button>
+
+            <!-- Search Input -->
+            <div class="relative hidden sm:block w-36 md:w-56">
+                <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="명소/키워드 검색..." class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-400 transition">
+                <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-xs text-slate-500"></i>
+            </div>
+
+            <!-- View Bookmark Toggle -->
+            <button onclick="toggleBookmarkFilter()" id="btn-bookmark-filter" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-bookmark text-amber-400"></i>
+                <span class="hidden md:inline">북마크</span>
+                <span id="bookmark-count-badge" class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded-full">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Category Filters Toolbar -->
+    <nav class="bg-slate-900/80 border-b border-slate-800/80 px-4 py-2 flex items-center justify-between shrink-0 overflow-x-auto gap-2">
+        <div class="flex items-center gap-1.5" id="category-filters">
+            <button onclick="filterCategory('all')" id="btn-all" class="cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-amber-400 text-slate-950 transition whitespace-nowrap font-bold">전체 (<span id="count-all">0</span>)</button>
+            <button onclick="filterCategory('landmark')" id="btn-landmark" class="cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-solid fa-camera mr-1"></i>야경/랜드마크</button>
+            <button onclick="filterCategory('history')" id="btn-history" class="cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-solid fa-landmark mr-1"></i>역사/문화</button>
+            <button onclick="filterCategory('shopping')" id="btn-shopping" class="cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-solid fa-bag-shopping mr-1"></i>쇼핑/시티워크</button>
+            <button onclick="filterCategory('theme')" id="btn-theme" class="cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>테마/근교</button>
+        </div>
+
+        <div class="text-[11px] text-slate-400 hidden lg:flex items-center gap-3">
+            <span><i class="fa-solid fa-star text-amber-400 mr-1"></i>핵심 7대 명소</span>
+            <span><i class="fa-solid fa-circle text-sky-400 mr-1"></i>서브 추천 명소</span>
+        </div>
+    </nav>
+
+    <!-- Main Content Area: Split View -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- LEFT PANEL: Graphic Vector Map + Place Cards List -->
+        <div id="left-panel" class="w-full md:w-1/2 lg:w-5/12 flex flex-col border-r border-slate-800 bg-slate-900/50 h-full overflow-hidden transition-all duration-300 shrink-0">
+            
+            <!-- Graphic Vector Map Header Container -->
+            <div id="map-section" class="relative map-container h-48 sm:h-60 border-b border-slate-800 p-3 shrink-0 overflow-hidden select-none transition-all duration-300">
+                <div class="absolute top-2 left-3 z-10 bg-slate-900/90 backdrop-blur border border-slate-800 px-2.5 py-1 rounded-md text-[11px] text-amber-400 font-medium shadow-md flex items-center gap-1.5">
+                    <i class="fa-solid fa-map-marked-alt"></i> 상하이 핵심 시티 벡터 지도
+                </div>
+                
+                <!-- Huangpu River Flow Artwork SVG -->
+                <svg class="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 400 300" fill="none">
+                    <!-- River path -->
+                    <path d="M 30 300 C 170 240, 150 130, 210 90 C 250 65, 330 35, 400 0" stroke="#0284c7" stroke-width="36" stroke-linecap="round" />
+                    <!-- Metro lines abstract simulation -->
+                    <path d="M 0 160 Q 200 150 400 170" stroke="#10b981" stroke-dasharray="3 3" stroke-width="1.5" opacity="0.6"/>
+                    <path d="M 120 0 Q 150 150 280 300" stroke="#f43f5e" stroke-dasharray="3 3" stroke-width="1.5" opacity="0.6"/>
+                </svg>
+
+                <!-- Zone Area Labels on Vector Map -->
+                <span class="absolute bottom-3 left-4 text-[10px] font-bold text-slate-500 tracking-wider uppercase bg-slate-950/60 px-1.5 py-0.5 rounded">Huangpu (황푸)</span>
+                <span class="absolute top-3 right-4 text-[10px] font-bold text-slate-500 tracking-wider uppercase bg-slate-950/60 px-1.5 py-0.5 rounded">Pudong (푸동)</span>
+
+                <!-- Interactive Map Pins (Rendered Dynamic via JS) -->
+                <div id="map-pins-container" class="absolute inset-0 w-full h-full">
+                    <!-- Pins inserted by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Place Cards Selection List Header -->
+            <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs font-semibold text-slate-400 flex justify-between items-center shrink-0">
+                <span><i class="fa-solid fa-list-ul mr-1.5 text-amber-400"></i>명소 목록 (<span id="filtered-count">0</span>)</span>
+                <span class="text-[11px] font-normal text-slate-500 hidden sm:inline">카드를 클릭하여 상세 정보 보기</span>
+            </div>
+
+            <!-- Place Cards Selection List -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2.5" id="place-list">
+                <!-- Cards rendered dynamically -->
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: Place Details & Content -->
+        <div class="w-full md:w-1/2 lg:w-7/12 flex flex-col h-full bg-slate-950 overflow-y-auto relative transition-all duration-300 shrink-0 hidden md:flex" id="detail-panel">
+            <!-- Dynamic Content rendered by JavaScript -->
+        </div>
+
+    </div>
+
+    <!-- Image Lightbox Modal for Fullscreen Viewing -->
+    <div id="image-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex flex-col items-center justify-center p-4" onclick="closeImageModal()">
+        <button onclick="closeImageModal()" class="absolute top-4 right-4 text-white text-2xl bg-slate-800/80 hover:bg-amber-400 hover:text-slate-950 w-10 h-10 rounded-full transition flex items-center justify-center z-10">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="relative max-w-4xl max-h-[85vh] w-full flex flex-col items-center" onclick="event.stopPropagation()">
+            <img id="modal-img" src="" alt="Enlarged view" class="max-w-full max-h-[75vh] rounded-2xl border border-slate-700 shadow-2xl object-contain">
+            <p id="modal-caption" class="mt-3 text-sm font-medium text-amber-300 bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-xl text-center"></p>
+        </div>
+    </div>
+
+    <!-- JavaScript Data and Controller -->
+    <script>
+        // Comprehensive Shanghai Travel Places Data
+        const placesData = [
+            {
+                id: 'bund',
+                name: '와이탄 (The Bund, 外滩)',
+                isMajor: true,
+                category: 'landmark',
+                categoryLabel: '7대 주요 명소 · 야경',
+                shortDesc: '상하이의 역사와 화려한 마천루 야경이 교차하는 수변 산책로',
+                mapPos: { top: '48%', left: '38%' },
+                icon: 'fa-camera-retro',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1000&q=80', caption: '와이탄 수변에서 조망하는 황푸강과 푸동 야경' },
+                    { url: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1000&q=80', caption: '황금빛으로 빛나는 와이탄 유럽식 고건축물 거리의 밤' },
+                    { url: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=1000&q=80', caption: '와이탄 산책로와 화려한 시티 스카이라인' }
+                ],
+                address: 'Huangpu District, Zhongshan East 1st Rd, Shanghai',
+                metro: '지하철 2/10호선 난징동루(Nanjing Road East)역 2번 출구 도보 10분',
+                estCost: '무료 (페리 탑승 시 2 RMB)',
+                history: `19세기 아편전쟁 이후 상하이가 개항하면서 영국과 프랑스의 조계지로 지정되었던 역사적인 장소입니다. 
+                          당시 서양 금융기관, 관공서, 영사관 등이 들어서며 '동양의 월스트리트'로 불렸습니다. 
+                          고딕, 로마네스크, 바록, 아트데코 등 52개의 다양한 근대 유럽식 건축물들이 보존되어 있어 '세계 건축 박물관'으로 불리며, 
+                          황푸강 건너편 푸동 초고층 마천루 단지와 대조를 이루어 상하이의 과거와 현재를 한눈에 보여줍니다.`,
+                activities: [
+                    { title: '황푸강 수변 야경 산책', desc: '일몰 후 점등되는 황금빛 유럽식 건물 야경 감상 (점등 시간: 19:00~22:00)', img: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=500&q=80' },
+                    { title: '2위안 황푸강 페리 유람', desc: '바이롄징 페리 승강장에서 단돈 2위안 페리를 타고 강상 야경 즐기기', img: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=500&q=80' },
+                    { title: '루프탑 바 스냅 사진', desc: '와이탄 6호나 루프탑 바에서 푸동 마천루와 동방명주를 배경으로 사진 촬영', img: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '상해 진가 게살국수 (蟹黄面)', desc: '진한 게알과 게살이 가득 들어간 상하이 최고 인기 특선 면요리', img: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=500&q=80' },
+                    { title: '상하이 정통 베이징덕 (베이징카오야)', desc: '바삭하게 구운 오리 껍질과 밀전병, 야채 밀쌈의 조합', img: 'https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?auto=format&fit=crop&w=500&q=80' },
+                    { title: '상하이식 동파육 (홍샤오러우)', desc: '달콤 짭조름한 소스에 부드럽게 조려낸 대표 남방 돼지고기 요리', img: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'pudong-skyscrapers',
+                name: '푸동 마천루 & 동방명주',
+                isMajor: true,
+                category: 'landmark',
+                categoryLabel: '7대 주요 명소 · 랜드마크',
+                shortDesc: '동방명주, 상하이 타워 등 세계 최고 수준의 초고층 마천루 밀집 구역',
+                mapPos: { top: '40%', left: '55%' },
+                icon: 'fa-building-ngo',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=1000&q=80', caption: '푸동 루자쭈이의 초고층 마천루 스카이라인' },
+                    { url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1000&q=80', caption: '상하이의 상징 동방명주 타워의 웅장한 야경' }
+                ],
+                address: 'Pudong New Area, Lujiazui Ring Rd, Shanghai',
+                metro: '지하철 2호선 루자쭈이(Lujiazui)역 1/2번 출구 직결',
+                estCost: '전망대 입장료 약 180~220 RMB',
+                history: `1990년대 이전까지만 해도 갯벌과 논밭이었던 푸동 지역은 중국의 개혁개방 프로젝트의 핵심으로 지정되면서 
+                          단 30년 만에 세계 금융과 경제의 중심지로 급부상했습니다. 
+                          상하이의 상징인 동방명주(468m)를 시작으로, 상하이 월드금융센터(SWFC, 492m), 
+                          그리고 세계에서 두 번째로 높은 상하이 타워(632m)가 차례로 들어서며 현대 중국의 성장 동력을 보여줍니다.`,
+                activities: [
+                    { title: '상하이 타워 118층 전망대', desc: 'Top of Shanghai 전망대에서 360도 스카이라인 파노라마 감상', img: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=500&q=80' },
+                    { title: '동방명주 스카이워크', desc: '동방명주 투명 유리 스카이워크를 거닐며 발밑 풍경 체험', img: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '푸동 루자쭈이 프리미엄 베이징덕', desc: '마천루 야경을 바라보며 즐기는 정통 바삭한 오리구이 프렌치 스타일', img: 'https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?auto=format&fit=crop&w=500&q=80' },
+                    { title: 'IFC몰 프리미엄 미슐랭 딤섬', desc: '크리스탈 제이드, 딤타이펑 등 고품격 하가우와 딤섬', img: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'north-bund',
+                name: '노스 바운드 (North Bund, 北外滩)',
+                isMajor: false,
+                category: 'landmark',
+                categoryLabel: '서브 명소 · 야경 스팟',
+                shortDesc: '동방명주와 와이탄 야경을 완벽한 각도로 담을 수 있는 최신 수변 공원',
+                mapPos: { top: '30%', left: '48%' },
+                icon: 'fa-water',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1000&q=80', caption: '노스 바운드 은빛 구형 조형물과 황푸강 건너 동방명주' }
+                ],
+                address: 'Hongkou District, Dongdaming Rd, Shanghai',
+                metro: '지하철 12호선 인터내셔널 크루즈 터미널역 3번 출구',
+                estCost: '무료',
+                history: `과거 상하이 항만의 핵심 크루즈 선착장이었던 홍커우 구역을 수변 친수 공원으로 재개발한 핫플레이스입니다. 
+                          기존 와이탄보다 덜 붐비면서도 푸동 마천루와 와이탄 고건축물을 동시에 조망할 수 있는 조망 명소로 손꼽힙니다.`,
+                activities: [
+                    { title: '은빛 구형 조형물 포토존', desc: '상하이의 눈 조형물 앞에서 동방명주 배경 인생샷 촬영', img: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '수변 트렌디 비스트로 & 맥주', desc: '황푸강 바람을 맞으며 즐기는 수제 맥주와 아시안 퓨전 요리', img: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'yuyuan',
+                name: '예원 (Yu Garden, 豫园) & 청황묘',
+                isMajor: true,
+                category: 'history',
+                categoryLabel: '7대 주요 명소 · 전통 정원',
+                shortDesc: '명나라 관료의 효심이 담긴 400년 역사의 정교한 명·청 정원',
+                mapPos: { top: '62%', left: '38%' },
+                icon: 'fa-torii-gate',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1000&q=80', caption: '화려한 명·청 양식 목조 건축물과 청황묘 야경' },
+                    { url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1000&q=80', caption: '예원 정원 내부의 구곡교와 운치 있는 연못' }
+                ],
+                address: '279 Yuyuan Rd, Huangpu, Shanghai',
+                metro: '지하철 10/14호선 예원(Yuyuan)역 1번 출구 도보 5분',
+                estCost: '입장료 약 30~40 RMB',
+                history: `명나라 시대 재상이었던 '반윤단'이 연로하신 부모님의 편안한 노후를 위해 1559년부터 20여 년에 걸쳐 조성한 개인 정원입니다. 
+                          '예(豫)'라는 글자는 '부모님을 기쁘고 평안하게 해드린다'는 뜻을 지니고 있습니다. 
+                          담장 위를 흐르는 용 조각과 구불구불한 다리, 정자와 기암괴석이 어우러진 남방 정원의 정수를 보여줍니다.`,
+                activities: [
+                    { title: '구곡교 (九曲桥) 건너기', desc: '액운을 막아준다는 9번 꺾인 정원 다리 거닐기', img: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=500&q=80' },
+                    { title: '청황묘 야간 등불 구경', desc: '화려한 금빛 목조 건물과 조명 아래 스냅 사진', img: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '예원 특선 게살국수 (蟹黄面)', desc: '상해 예원 유명 맛집의 고소하고 진한 게황면', img: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=500&q=80' },
+                    { title: '남상만두점 샤오롱바오', desc: '100년 전통의 얇은 피와 육즙이 가득한 만두', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=500&q=80' },
+                    { title: '게살 관탕바오 (灌汤包)', desc: '빨대로 육즙을 빨아먹는 대형 샤오롱바오', img: 'https://images.unsplash.com/photo-1496116218417-1a781b1c416c?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'shanghai-museum',
+                name: '상하이 박물관 (Shanghai Museum)',
+                isMajor: false,
+                category: 'history',
+                categoryLabel: '서브 명소 · 역사 문화',
+                shortDesc: '중국 4대 박물관 중 하나로 꼽히는 청동기 및 도자기 보물 창고',
+                mapPos: { top: '50%', left: '28%' },
+                icon: 'fa-landmark-dome',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1566127444979-b3d2b654e3d7?auto=format&fit=crop&w=1000&q=80', caption: '상하이 박물관 외관 및 고대 도자기 전시' }
+                ],
+                address: '201 Renmin Ave, Huangpu District, Shanghai',
+                metro: '지하철 1/2/8호선 인민광장(People Square)역 1번 출구 도보 3분',
+                estCost: '무료 (사전 예약 필요)',
+                history: `1952년 개관하여 1996년 인민광장에 현재의 둥근 하늘과 네모난 땅(천원지방)을 상징하는 건축물로 재단장했습니다. 
+                          12만 점 이상의 국보급 청동기, 도자기, 서예, 회화 유물을 소장하고 있어 중국 고대 예술을 관람할 수 있습니다.`,
+                activities: [
+                    { title: '고대 중국 청동기 & 도자기 관람', desc: '세계 최고 수준의 국보급 청동기 및 송·명대 도자기 탐구', img: 'https://images.unsplash.com/photo-1566127444979-b3d2b654e3d7?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '박물관 아트 카페 유물 쿠키', desc: '대표 청동기 문양 음각 쿠키와 정통 차', img: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'jingan-temple',
+                name: '정안사 (Jing\'an Temple, 静安寺)',
+                isMajor: false,
+                category: 'history',
+                categoryLabel: '서브 명소 · 불교 사찰',
+                shortDesc: '상하이 번화가 마천루 사이에 자리 잡은 황금빛 강남 고찰',
+                mapPos: { top: '42%', left: '18%' },
+                icon: 'fa-gopuram',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1512632578888-169bbbc64f33?auto=format&fit=crop&w=1000&q=80', caption: '도심속 황금빛 지붕으로 오색 찬란하게 빛나는 정안사' }
+                ],
+                address: '1686 Nanjing West Rd, Jing\'an District, Shanghai',
+                metro: '지하철 2/7/14호선 정안사(Jing\'an Temple)역 1번 출구 직결',
+                estCost: '입장료 약 50 RMB',
+                history: `삼국시대 오나라 손권 시대인 247년에 창건되어 1,700년 이상의 역사를 자랑하는 사찰입니다. 
+                          현재 건물은 황금빛 지붕으로 웅장하게 재건되었으며, 초고층 백화점과 빌딩 숲 한가운데 위치하여 이색적인 풍경을 자아냅니다.`,
+                activities: [
+                    { title: '대웅전 거대 은불상 관람', desc: '15톤 무게의 웅장한 은불상 참배', img: 'https://images.unsplash.com/photo-1512632578888-169bbbc64f33?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '정안사 인근 유명 전통 베이징덕 레스토랑', desc: '사찰 구경 후 즐기는 겉바속촉 베이징카오야', img: 'https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'nanjing-road',
+                name: '난징동루 (Nanjing Road Pedestrian St.)',
+                isMajor: true,
+                category: 'shopping',
+                categoryLabel: '7대 주요 명소 · 번화가',
+                shortDesc: '상하이 최고의 대표 쇼핑 거리이자 화려한 네온사인의 보행자 천국',
+                mapPos: { top: '44%', left: '32%' },
+                icon: 'fa-bag-shopping',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1000&q=80', caption: '화려한 네온사인 간판이 반겨주는 난징동루 보행가' }
+                ],
+                address: 'Nanjing Road Pedestrian Street, Huangpu District, Shanghai',
+                metro: '지하철 2/10호선 난징동루(Nanjing Road East)역 1/4번 출구',
+                estCost: '무료 (쇼핑/트램 별도)',
+                history: `1851년 형성되어 중국에서 가장 오래되고 규모가 큰 상업지구 중 하나입니다. 
+                          '중국 첫 번째 쇼핑 거리'로 불리며, 전통 상점들과 글로벌 브랜드 매장, 
+                          대형 쇼핑몰들이 긴 보행자 도로를 따라 이어져 있습니다.`,
+                activities: [
+                    { title: '알록달록 관광 트램 시승', desc: '클래식 꼬마 기차를 타고 보행가 둘러보기 (5 RMB)', img: 'https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=500&q=80' },
+                    { title: 'm&m스토어 & 레고 플래그십 탐방', desc: '아시아 최대 매장에서 기념품 쇼핑', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '난징동루 황금 게살국수 (蟹黄面)', desc: '유명 맛집에서 면 위에 푸짐하게 올려주는 게알 진미', img: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=500&q=80' },
+                    { title: '릴리안 베이커리 에그타르트', desc: '갓 구워내 따끈하고 사르르 녹는 상하이 No.1 에그타르트', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=500&q=80' },
+                    { title: '선다청 왕찹쌀떡', desc: '팥과 고기가 들어간 고소한 상하이 수제 전통 떡', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'xintiandi',
+                name: '신천지 (Xintiandi) & 임시정부 청사',
+                isMajor: true,
+                category: 'shopping',
+                categoryLabel: '7대 주요 명소 · 시티워크',
+                shortDesc: '스쿠먼 가옥과 테라스 카페, 역사적 청사가 공존하는 거리',
+                mapPos: { top: '58%', left: '25%' },
+                icon: 'fa-mug-hot',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1000&q=80', caption: '고풍스러운 스쿠먼 벽돌 가옥과 세련된 야외 카페' }
+                ],
+                address: 'Lane 181, Taicang Road, Huangpu District, Shanghai',
+                metro: '지하철 10/13호선 신천지(Xintiandi)역 6번 출구 도보 3분',
+                estCost: '무료 (청사 관람료 약 20 RMB)',
+                history: `19세기 말 상하이 서민들의 주거 양식이었던 '스쿠먼(石庫門)' 양식을 현대적으로 재해석하여 보존 개발한 복합 문화 공간입니다. 
+                          붉은 벽돌 가옥의 고풍스러움을 유지하면서 내부를 카페와 부티크 숍으로 개조했습니다. 
+                          또한 도보 3분 거리에 대한민국 임시정부 청사(1926~1932년 사용)가 위치해 있습니다.`,
+                activities: [
+                    { title: '대한민국 임시정부 청사 참배', desc: '역사적인 임시정부 골목 방문 및 뜻깊은 참배', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=500&q=80' },
+                    { title: '스쿠먼 골목 브런치 스냅', desc: '붉은 벽돌 감성 골목길에서 사진 촬영 및 브런치', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '신천지 야외 테라스 베이징덕 레스토랑', desc: '세련된 정원에서 감성 있게 즐기는 베이징덕', img: 'https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?auto=format&fit=crop&w=500&q=80' },
+                    { title: '신천지 유럽식 브런치 & 수제맥주', desc: '테라스에서 즐기는 파스타와 스페셜티 핸드드립 커피', img: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'wukang-road',
+                name: '우캉루 (Wukang Road) & 우캉맨션',
+                isMajor: false,
+                category: 'shopping',
+                categoryLabel: '서브 명소 · 감성 거리',
+                shortDesc: '프랑스 플라타너스 가로수와 배 모양의 우캉맨션이 있는 포토스팟',
+                mapPos: { top: '55%', left: '12%' },
+                icon: 'fa-tree',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1000&q=80', caption: '독특한 배 모양의 우캉맨션 건축물과 가로수길' }
+                ],
+                address: 'Wukang Rd, Xuhui District, Shanghai',
+                metro: '지하철 10/11호선 교통대학(Jiao Tong University)역 7번 출구 도보 5분',
+                estCost: '무료',
+                history: `구 프랑스 조계지 지역으로 1900년대 초에 조성된 고풍스러운 거리입니다. 
+                          거리 입구에 위치한 '우캉맨션'은 건축가 라슬로 우허치가 디자인한 
+                          배(Ship) 모양의 독특한 아트데코 양식 건물로 포토존으로 사랑받고 있습니다.`,
+                activities: [
+                    { title: '우캉맨션 삼거리 스냅 촬영', desc: '유럽 분위기 풍기는 교차로 배경 포토존', img: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '우캉루 로스터리 카페 아이스 라떼', desc: '인스타 감성 카페에서 즐기는 커스텀 커피와 크루아상', img: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'tianzifang',
+                name: '톈즈팡 (Tianzifang, 田子坊)',
+                isMajor: false,
+                category: 'shopping',
+                categoryLabel: '서브 명소 · 예술 골목',
+                shortDesc: '미로 같은 좁은 골목 속 아기자기한 공예품과 예술가 작업실',
+                mapPos: { top: '65%', left: '20%' },
+                icon: 'fa-palette',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1000&q=80', caption: '아기자기한 소품샵과 공예품이 가득한 톈즈팡 골목' }
+                ],
+                address: '210 Taikang Rd, Huangpu District, Shanghai',
+                metro: '지하철 9호선 다푸차오(Dapuqiao)역 1번 출구 도보 2분',
+                estCost: '무료',
+                history: `과거 서민들이 거주하던 옛 가옥 및 공장 지대에 1990년대 후반부터 예술가들과 공예가들이 모여들며 조성된 거리입니다. 
+                          미로 형태의 옛 골목길 형태가 유지되어 개성 넘치는 분위기를 느낄 수 있습니다.`,
+                activities: [
+                    { title: '골목 수공예품 & 아티스트 공방 탐방', desc: '아기자기한 핸드메이드 소품 및 기념품 쇼핑', img: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '특산 과일 차 & 수제 아이스크림', desc: '시원한 과일 꽃차와 젤라또 아이스크림', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'disneyland',
+                name: '상하이 디즈니랜드 (Shanghai Disneyland)',
+                isMajor: true,
+                category: 'theme',
+                categoryLabel: '7대 주요 명소 · 테마파크',
+                shortDesc: '세계 최대 규모의 디즈니 캐슬과 최초의 주토피아 테마 구역',
+                mapPos: { top: '75%', left: '80%' },
+                icon: 'fa-wand-magic-sparkles',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1000&q=80', caption: '웅장한 디즈니 캐슬과 야간 불꽃 레이저쇼' }
+                ],
+                address: 'Pudong New Area, Huangzhao Rd, Shanghai',
+                metro: '지하철 11호선 디즈니랜드(Disneyland Resort)역 2/4번 출구 도보 5분',
+                estCost: '입장료 약 475~799 RMB (일자별 변동)',
+                history: `2016년 개장한 아시아 최대 규모의 디즈니 테마파크입니다. 
+                          중국 전통 문화와 디즈니 모티브를 결합한 슬로건 아래 조성되었으며, 
+                          특히 2023년 말 전 세계 디즈니랜드 최초로 영화 <주토피아>를 테마로 한 대형 구역이 오픈했습니다.`,
+                activities: [
+                    { title: '세계 최초 주토피아 구역 체험', desc: '닉 & 주디 라이드 및 시티 디테일 구경', img: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=500&q=80' },
+                    { title: 'TRON 라이트사이클 라이드', desc: '초고속 미래형 오토바이 스릴 코스터', img: 'https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '주토피아 당근/발바닥 아이스크림', desc: '주디와 닉 테마 캐릭터 아이스크림 바', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=500&q=80' },
+                    { title: '미키마우스 중식 수제 샌드', desc: '미키 모양 번과 바비큐 고기 샌드위치', img: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=500&q=80' }
+                ]
+            },
+            {
+                id: 'zhujiajiao',
+                name: '주자자오 (Zhujiajiao, 朱家角) 수향마을',
+                isMajor: true,
+                category: 'theme',
+                categoryLabel: '7대 주요 명소 · 수향마을',
+                shortDesc: '1,700년 역사의 물길과 돌다리가 어우러진 상하이의 베니스',
+                mapPos: { top: '82%', left: '10%' },
+                icon: 'fa-ship',
+                gallery: [
+                    { url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1000&q=80', caption: '운하를 따라 조성된 수향마을 가옥들과 나룻배' }
+                ],
+                address: 'Zhujiajiao Town, Qingpu District, Shanghai',
+                metro: '지하철 17호선 주자자오(Zhujiajiao)역 1번 출구 도보 15분',
+                estCost: '마을 입장 무료 (곤돌라 배 탑승 약 40~150 RMB)',
+                history: `송·원 시대부터 형성되어 명·청 시대에 쌀과 섬유 거래의 중심지로 번창한 1,700년 역사의 수향(水鄕) 마을입니다. 
+                          운하를 따라 오래된 목조 가옥들과 돌다리들이 이어져 있으며, 옛 동아시아 수변 상업 도시의 형태를 간직하고 있습니다.`,
+                activities: [
+                    { title: '방생교 (放生桥) 조망', desc: '주자자오 최대 아치형 돌다리에서 수향마을 전경 감상', img: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=500&q=80' },
+                    { title: '전통 나룻배 유람', desc: '사공이 저어주는 곤돌라 배를 타고 물길 따라 유람', img: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=500&q=80' }
+                ],
+                foods: [
+                    { title: '주자자오 게살 국수 & 연잎 찰밥', desc: '물가 찻집에서 즐기는 연잎 돼지갈비 조림과 게황면', img: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=500&q=80' },
+                    { title: '수향 강변 전통 용정차', desc: '운하 옆 테라스에서 즐기는 향긋한 차 한 잔의 여유', img: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=500&q=80' }
+                ]
+            }
+        ];
+
+        let currentPlaceId = 'bund';
+        let currentFilter = 'all';
+        let bookmarks = JSON.parse(localStorage.getItem('shanghai_bookmarks') || '[]');
+        let isBookmarkOnly = false;
+        let currentSlideIndex = 0;
+        let isDetailPanelVisible = true;
+        let isMobileView = window.innerWidth < 768;
+
+        // Initialize Web Application
+        window.onload = function() {
+            updateCounts();
+            renderMapPins();
+            renderPlaceList();
+            renderDetailPanel(currentPlaceId);
+            updateBookmarkBadge();
+
+            window.addEventListener('resize', handleResize);
+        };
+
+        function handleResize() {
+            const currentMobile = window.innerWidth < 768;
+            if (currentMobile !== isMobileView) {
+                isMobileView = currentMobile;
+                const leftPanel = document.getElementById('left-panel');
+                const detailPanel = document.getElementById('detail-panel');
+                
+                if (!isMobileView) {
+                    // Switch to Desktop
+                    leftPanel.classList.remove('mobile-hide');
+                    if (isDetailPanelVisible) {
+                        detailPanel.classList.remove('hidden');
+                    }
+                } else {
+                    // Switch to Mobile
+                    if (isDetailPanelVisible) {
+                        leftPanel.classList.add('mobile-hide');
+                        detailPanel.classList.remove('hidden');
+                        detailPanel.classList.add('flex');
+                    } else {
+                        leftPanel.classList.remove('mobile-hide');
+                        detailPanel.classList.add('hidden');
+                        detailPanel.classList.remove('flex');
+                    }
+                }
+            }
+        }
+
+        // Universal Detail Panel Toggle Handler (Desktop & Mobile)
+        function toggleDetailPanel() {
+            isDetailPanelVisible = !isDetailPanelVisible;
+            const leftPanel = document.getElementById('left-panel');
+            const detailPanel = document.getElementById('detail-panel');
+            const btnText = document.getElementById('detail-btn-text');
+            const btnIcon = document.getElementById('detail-btn-icon');
+            const btnToggle = document.getElementById('btn-detail-toggle');
+
+            if (window.innerWidth < 768) {
+                // Mobile behavior
+                if (isDetailPanelVisible) {
+                    leftPanel.classList.add('mobile-hide');
+                    detailPanel.classList.remove('hidden');
+                    detailPanel.classList.add('flex');
+                    btnText.innerText = '지도/목록 보기';
+                    btnIcon.className = 'fa-solid fa-map-location-dot';
+                    btnToggle.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 shadow-md flex items-center gap-1.5 hover:bg-amber-300 transition';
+                } else {
+                    leftPanel.classList.remove('mobile-hide');
+                    detailPanel.classList.add('hidden');
+                    detailPanel.classList.remove('flex');
+                    btnText.innerText = '상세 설명 보기';
+                    btnIcon.className = 'fa-solid fa-circle-info';
+                    btnToggle.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-amber-400 border border-amber-400/50 shadow-md flex items-center gap-1.5 hover:bg-slate-700 transition';
+                }
+            } else {
+                // Desktop behavior
+                if (isDetailPanelVisible) {
+                    detailPanel.classList.remove('detail-panel-collapsed', 'hidden');
+                    detailPanel.classList.add('flex');
+                    btnText.innerText = '설명창 접기';
+                    btnIcon.className = 'fa-solid fa-sidebar';
+                    btnToggle.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 shadow-md flex items-center gap-1.5 hover:bg-amber-300 transition';
+                } else {
+                    detailPanel.classList.add('detail-panel-collapsed', 'hidden');
+                    detailPanel.classList.remove('flex');
+                    btnText.innerText = '설명창 펼치기';
+                    btnIcon.className = 'fa-regular fa-window-maximize';
+                    btnToggle.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-amber-400 border border-amber-400/50 shadow-md flex items-center gap-1.5 hover:bg-slate-700 transition';
+                }
+            }
+        }
+
+        function updateCounts() {
+            document.getElementById('count-all').innerText = placesData.length;
+        }
+
+        function updateBookmarkBadge() {
+            document.getElementById('bookmark-count-badge').innerText = bookmarks.length;
+        }
+
+        function toggleBookmark(id, event) {
+            if (event) event.stopPropagation();
+            
+            const index = bookmarks.indexOf(id);
+            if (index > -1) {
+                bookmarks.splice(index, 1);
+            } else {
+                bookmarks.push(id);
+            }
+            localStorage.setItem('shanghai_bookmarks', JSON.stringify(bookmarks));
+            
+            updateBookmarkBadge();
+            renderMapPins();
+            renderPlaceList();
+            renderDetailPanel(currentPlaceId);
+        }
+
+        function toggleBookmarkFilter() {
+            isBookmarkOnly = !isBookmarkOnly;
+            const btn = document.getElementById('btn-bookmark-filter');
+            if (isBookmarkOnly) {
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-400 text-slate-950 transition flex items-center gap-1.5 font-bold";
+            } else {
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5";
+            }
+            renderMapPins();
+            renderPlaceList();
+        }
+
+        // Render Dynamic Interactive Map Pins
+        function renderMapPins() {
+            const container = document.getElementById('map-pins-container');
+            container.innerHTML = '';
+
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+
+            placesData.forEach(place => {
+                const matchesCategory = currentFilter === 'all' || place.category === currentFilter;
+                const matchesSearch = place.name.toLowerCase().includes(searchTerm) || place.shortDesc.toLowerCase().includes(searchTerm);
+                const matchesBookmark = !isBookmarkOnly || bookmarks.includes(place.id);
+
+                if (!matchesCategory || !matchesSearch || !matchesBookmark) return;
+
+                const isSelected = place.id === currentPlaceId;
+                const isBookmarked = bookmarks.includes(place.id);
+                
+                const pin = document.createElement('div');
+                pin.className = `absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 ${isSelected ? 'z-30 scale-125' : 'z-10 hover:scale-110 hover:z-20'}`;
+                pin.style.top = place.mapPos.top;
+                pin.style.left = place.mapPos.left;
+                pin.onclick = () => selectPlace(place.id);
+
+                const badgeBg = place.isMajor 
+                    ? (isSelected ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 glow-amber' : 'bg-amber-500/20 text-amber-300 border border-amber-400/40')
+                    : (isSelected ? 'bg-sky-400 text-slate-950 ring-2 ring-sky-300' : 'bg-slate-900/90 text-slate-300 border border-slate-700');
+
+                const pinIconBg = isSelected
+                    ? 'bg-amber-400 text-slate-950 ring-4 ring-amber-400/40 map-pulse'
+                    : (place.isMajor ? 'bg-slate-900 text-amber-400 border border-amber-400' : 'bg-slate-800 text-slate-300 border border-slate-600');
+
+                pin.innerHTML = `
+                    <div class="flex flex-col items-center group">
+                        <span class="text-[10px] px-2 py-0.5 rounded-md font-bold shadow-lg mb-1 whitespace-nowrap transition-all flex items-center gap-1 ${badgeBg}">
+                            ${isBookmarked ? '<i class="fa-solid fa-bookmark text-[9px] text-amber-400"></i>' : ''}
+                            ${place.name.split(' ')[0]} ${place.isMajor ? '★' : ''}
+                        </span>
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${pinIconBg}">
+                            <i class="fa-solid ${place.icon}"></i>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(pin);
+            });
+        }
+
+        // Render Left Panel Place Cards Selection List
+        function renderPlaceList() {
+            const container = document.getElementById('place-list');
+            container.innerHTML = '';
+
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const filteredPlaces = placesData.filter(p => {
+                const matchesCategory = currentFilter === 'all' || p.category === currentFilter;
+                const matchesSearch = p.name.toLowerCase().includes(searchTerm) || p.shortDesc.toLowerCase().includes(searchTerm);
+                const matchesBookmark = !isBookmarkOnly || bookmarks.includes(p.id);
+                return matchesCategory && matchesSearch && matchesBookmark;
+            });
+
+            document.getElementById('filtered-count').innerText = filteredPlaces.length;
+
+            if (filteredPlaces.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10 text-slate-500 text-xs">
+                        <i class="fa-solid fa-compass fa-2x mb-2 text-slate-600"></i>
+                        <p>해당하는 명소가 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filteredPlaces.forEach(place => {
+                const isSelected = place.id === currentPlaceId;
+                const isBookmarked = bookmarks.includes(place.id);
+                const thumbnailImg = place.gallery && place.gallery.length > 0 ? place.gallery[0].url : '';
+
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-xl border transition-all cursor-pointer flex gap-3 ${
+                    isSelected 
+                    ? 'bg-slate-800/90 border-amber-400/80 shadow-lg glow-amber' 
+                    : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40'
+                }`;
+                card.onclick = () => selectPlace(place.id);
+
+                card.innerHTML = `
+                    <img src="${thumbnailImg}" alt="${place.name}" class="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover shrink-0 border border-slate-700/50">
+                    <div class="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-semibold ${place.isMajor ? 'text-amber-400 bg-amber-400/10 border-amber-400/30' : 'text-sky-400 bg-sky-400/10 border-sky-400/30'} px-2 py-0.5 rounded-full border">
+                                    ${place.categoryLabel}
+                                </span>
+                                <button onclick="toggleBookmark('${place.id}', event)" class="text-xs ${isBookmarked ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'} p-1">
+                                    <i class="fa-${isBookmarked ? 'solid' : 'regular'} fa-bookmark"></i>
+                                </button>
+                            </div>
+                            <h3 class="font-bold text-xs sm:text-sm text-white truncate">${place.name}</h3>
+                            <p class="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">${place.shortDesc}</p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Select Place Handler
+        function selectPlace(id) {
+            currentPlaceId = id;
+            currentSlideIndex = 0;
+            renderMapPins();
+            renderPlaceList();
+            renderDetailPanel(id);
+
+            if (window.innerWidth < 768) {
+                // Mobile: Show Detail panel full and hide list
+                isDetailPanelVisible = true;
+                const leftPanel = document.getElementById('left-panel');
+                const detailPanel = document.getElementById('detail-panel');
+                leftPanel.classList.add('mobile-hide');
+                detailPanel.classList.remove('hidden');
+                detailPanel.classList.add('flex');
+
+                document.getElementById('detail-btn-text').innerText = '지도/목록 보기';
+                document.getElementById('detail-btn-icon').className = 'fa-solid fa-map-location-dot';
+                document.getElementById('btn-detail-toggle').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 shadow-md flex items-center gap-1.5 hover:bg-amber-300 transition';
+            } else {
+                // Desktop: Keep panel visible
+                if (!isDetailPanelVisible) {
+                    toggleDetailPanel();
+                }
+            }
+        }
+
+        // Render Right Panel Details
+        function renderDetailPanel(id) {
+            const place = placesData.find(p => p.id === id);
+            const panel = document.getElementById('detail-panel');
+
+            if (!place) return;
+
+            const isBookmarked = bookmarks.includes(place.id);
+            const gallery = place.gallery || [];
+            const currentImg = gallery[currentSlideIndex] || { url: '', caption: '' };
+
+            panel.innerHTML = `
+                <!-- Mobile Navigation Return Bar -->
+                <div class="md:hidden bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
+                    <button onclick="toggleDetailPanel()" class="text-xs font-bold text-amber-400 flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 px-3 py-1.5 rounded-lg">
+                        <i class="fa-solid fa-arrow-left"></i> 지도 및 명소 목록으로
+                    </button>
+                    <span class="text-xs text-slate-400 font-medium truncate max-w-[150px]">${place.name.split(' ')[0]}</span>
+                </div>
+
+                <!-- Top Hero Gallery Slider Header -->
+                <div class="relative h-64 sm:h-80 w-full shrink-0 overflow-hidden bg-slate-900 group select-none">
+                    <img src="${currentImg.url}" alt="${place.name}" class="w-full h-full object-cover transition-all duration-500 cursor-pointer img-zoom" onclick="openImageModal('${currentImg.url}', '${currentImg.caption}')">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent pointer-events-none"></div>
+
+                    <!-- Gallery Slide Navigation Buttons -->
+                    ${gallery.length > 1 ? `
+                        <button onclick="changeSlide(-1, event)" class="absolute left-3 top-1/2 -translate-y-1/2 bg-slate-950/60 hover:bg-amber-400 hover:text-slate-950 text-white p-2.5 rounded-full backdrop-blur border border-slate-700/80 transition text-xs shadow-lg z-10">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button onclick="changeSlide(1, event)" class="absolute right-3 top-1/2 -translate-y-1/2 bg-slate-950/60 hover:bg-amber-400 hover:text-slate-950 text-white p-2.5 rounded-full backdrop-blur border border-slate-700/80 transition text-xs shadow-lg z-10">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    ` : ''}
+
+                    <!-- Top Right Controls -->
+                    <div class="absolute top-4 right-4 z-10 flex gap-2">
+                        <button onclick="openImageModal('${currentImg.url}', '${currentImg.caption}')" class="bg-slate-900/80 backdrop-blur text-xs font-medium border border-slate-700 text-slate-300 px-3 py-1.5 rounded-xl hover:bg-slate-800 transition flex items-center gap-1.5 shadow-lg">
+                            <i class="fa-solid fa-expand text-amber-400"></i>
+                            <span class="hidden sm:inline">사진 크게보기</span>
+                        </button>
+                        <button onclick="toggleBookmark('${place.id}', event)" class="bg-slate-900/80 backdrop-blur text-xs font-medium border border-slate-700 ${isBookmarked ? 'text-amber-400 border-amber-400/50' : 'text-slate-300'} px-3 py-1.5 rounded-xl hover:bg-slate-800 transition flex items-center gap-1.5 shadow-lg">
+                            <i class="fa-${isBookmarked ? 'solid' : 'regular'} fa-bookmark text-amber-400"></i>
+                            <span>${isBookmarked ? '북마크됨' : '저장'}</span>
+                        </button>
+                    </div>
+
+                    <!-- Slide Indicator & Caption -->
+                    <div class="absolute bottom-4 left-4 right-4 space-y-1.5 pointer-events-none">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-950 bg-amber-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-block">
+                                    ${place.categoryLabel}
+                                </span>
+                                ${place.isMajor ? '<span class="text-xs font-bold text-amber-300 bg-slate-900/80 border border-amber-400/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-star text-amber-400 mr-1"></i>핵심 7대 명소</span>' : ''}
+                            </div>
+                            ${gallery.length > 1 ? `<span class="text-[11px] font-bold text-amber-300 bg-slate-950/80 px-2.5 py-0.5 rounded-full border border-slate-800">${currentSlideIndex + 1} / ${gallery.length}</span>` : ''}
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-white drop-shadow-md">${place.name}</h2>
+                        <p class="text-xs text-amber-200/90 font-medium drop-shadow flex items-center gap-1">
+                            <i class="fa-solid fa-camera text-amber-400"></i> ${currentImg.caption}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Content Body Container -->
+                <div class="p-5 sm:p-7 space-y-6 flex-1">
+                    
+                    <!-- Quick Info Box (Address & Metro & Cost) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-900 border border-slate-800 p-4 rounded-xl text-xs text-slate-300">
+                        <div class="flex items-start gap-2.5">
+                            <i class="fa-solid fa-map-pin text-amber-400 mt-0.5 shrink-0"></i>
+                            <span><strong>위치:</strong> ${place.address}</span>
+                        </div>
+                        <div class="flex items-start gap-2.5">
+                            <i class="fa-solid fa-train-subway text-amber-400 mt-0.5 shrink-0"></i>
+                            <span><strong>교통:</strong> ${place.metro}</span>
+                        </div>
+                        <div class="flex items-start gap-2.5 sm:col-span-2 border-t border-slate-800/80 pt-2 mt-0.5">
+                            <i class="fa-solid fa-ticket text-amber-400 mt-0.5 shrink-0"></i>
+                            <span><strong>예상 비용/입장료:</strong> ${place.estCost}</span>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs Header -->
+                    <div class="border-b border-slate-800 flex gap-4 text-xs sm:text-sm font-medium">
+                        <button onclick="switchTab('history')" id="tab-btn-history" class="pb-2.5 border-b-2 border-amber-400 text-amber-400 font-bold transition">
+                            <i class="fa-solid fa-book-bookmark mr-1.5"></i> 역사적 배경
+                        </button>
+                        <button onclick="switchTab('activities')" id="tab-btn-activities" class="pb-2.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+                            <i class="fa-solid fa-compass mr-1.5"></i> 추천 체험
+                        </button>
+                        <button onclick="switchTab('foods')" id="tab-btn-foods" class="pb-2.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+                            <i class="fa-solid fa-utensils mr-1.5"></i> 추천 먹거리
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: History -->
+                    <div id="tab-content-history" class="tab-content active space-y-3">
+                        <h3 class="text-sm sm:text-base font-bold text-amber-300 flex items-center gap-2">
+                            <i class="fa-solid fa-landmark text-amber-400"></i> 명소의 역사와 시대적 배경
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-300 leading-relaxed bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl whitespace-pre-line">
+                            ${place.history}
+                        </p>
+                    </div>
+
+                    <!-- TAB 2: Key Activities with Photos -->
+                    <div id="tab-content-activities" class="tab-content space-y-3">
+                        <h3 class="text-sm sm:text-base font-bold text-amber-300 flex items-center gap-2">
+                            <i class="fa-solid fa-star text-amber-400"></i> 필수 체험 & 볼거리 포인트
+                        </h3>
+                        <div class="grid grid-cols-1 gap-3">
+                            ${place.activities.map(act => `
+                                <div class="flex flex-col sm:flex-row gap-3 bg-slate-900/60 border border-slate-800/90 p-3 rounded-xl hover:border-slate-700 transition">
+                                    <div class="relative w-full sm:w-32 h-32 shrink-0 rounded-lg overflow-hidden cursor-pointer" onclick="openImageModal('${act.img}', '${act.title}')">
+                                        <img src="${act.img}" alt="${act.title}" class="w-full h-full object-cover img-zoom">
+                                        <div class="absolute inset-0 bg-slate-950/20 hover:bg-transparent transition"></div>
+                                        <span class="absolute bottom-1.5 right-1.5 bg-slate-950/80 text-amber-300 text-[10px] px-1.5 py-0.5 rounded font-bold">확대</span>
+                                    </div>
+                                    <div class="flex-1 flex flex-col justify-center space-y-1">
+                                        <h4 class="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5">
+                                            <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
+                                            ${act.title}
+                                        </h4>
+                                        <p class="text-xs text-slate-400 leading-relaxed">${act.desc}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: Foods with Photos -->
+                    <div id="tab-content-foods" class="tab-content space-y-3">
+                        <h3 class="text-sm sm:text-base font-bold text-amber-300 flex items-center justify-between">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-bowl-food text-amber-400"></i> 주변 추천 미식 & 현지 먹거리</span>
+                            <span class="text-[11px] font-normal text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">★ 게살국수 / 베이징덕 포함</span>
+                        </h3>
+                        <div class="grid grid-cols-1 gap-3">
+                            ${place.foods.map(food => `
+                                <div class="flex flex-col sm:flex-row gap-3 bg-slate-900/60 border border-slate-800/90 p-3 rounded-xl hover:border-slate-700 transition">
+                                    <div class="relative w-full sm:w-32 h-32 shrink-0 rounded-lg overflow-hidden cursor-pointer" onclick="openImageModal('${food.img}', '${food.title}')">
+                                        <img src="${food.img}" alt="${food.title}" class="w-full h-full object-cover img-zoom">
+                                        <div class="absolute inset-0 bg-slate-950/20 hover:bg-transparent transition"></div>
+                                        <span class="absolute bottom-1.5 right-1.5 bg-slate-950/80 text-amber-300 text-[10px] px-1.5 py-0.5 rounded font-bold">확대</span>
+                                    </div>
+                                    <div class="flex-1 flex flex-col justify-center space-y-1">
+                                        <h4 class="font-bold text-xs sm:text-sm text-amber-200 flex items-center gap-1.5">
+                                            <i class="fa-solid fa-utensils text-amber-400 text-xs"></i>
+                                            ${food.title}
+                                        </h4>
+                                        <p class="text-xs text-slate-400 leading-relaxed">${food.desc}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                </div>
+            `;
+        }
+
+        // Image Gallery Slide Switcher
+        function changeSlide(direction, event) {
+            if (event) event.stopPropagation();
+            const place = placesData.find(p => p.id === currentPlaceId);
+            if (!place || !place.gallery) return;
+
+            currentSlideIndex = (currentSlideIndex + direction + place.gallery.length) % place.gallery.length;
+            renderDetailPanel(currentPlaceId);
+        }
+
+        // Image Lightbox Modal Handler
+        function openImageModal(imgUrl, caption) {
+            document.getElementById('modal-img').src = imgUrl;
+            document.getElementById('modal-caption').innerText = caption || '';
+            document.getElementById('image-modal').classList.remove('hidden');
+        }
+
+        function closeImageModal() {
+            document.getElementById('image-modal').classList.add('hidden');
+        }
+
+        // Tab Switch Controller
+        function switchTab(tabName) {
+            const tabs = ['history', 'activities', 'foods'];
+            
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const content = document.getElementById(`tab-content-${t}`);
+                
+                if (t === tabName) {
+                    btn.className = "pb-2.5 border-b-2 border-amber-400 text-amber-400 font-bold transition";
+                    content.classList.add('active');
+                } else {
+                    btn.className = "pb-2.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
+                    content.classList.remove('active');
+                }
+            });
+        }
+
+        // Category Filter Logic
+        function filterCategory(cat) {
+            currentFilter = cat;
+            
+            const buttons = document.querySelectorAll('#category-filters button');
+            buttons.forEach(btn => {
+                btn.className = "cat-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap";
+            });
+
+            document.getElementById(`btn-${cat}`).className = "cat-btn active px-3 py-1 rounded-lg text-xs font-medium bg-amber-400 text-slate-950 transition whitespace-nowrap font-bold";
+
+            renderMapPins();
+            renderPlaceList();
+        }
+
+        // Search Input Handler
+        function handleSearch() {
+            renderMapPins();
+            renderPlaceList();
+        }
+    </script>
+</body>
+</html>
